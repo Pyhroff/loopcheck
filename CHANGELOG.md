@@ -5,6 +5,35 @@ stage is a small, working, tested slice rather than one big-bang commit.
 
 ## [Unreleased]
 
+## [0.2.0] -- Framework adapters
+- `loopcheck/recorder.py`: `TraceRecorder` -- the shared core every adapter
+  builds on (`record_step()` appends a `Step`, `.save()` writes trace JSON).
+  Adapters only ever translate one provider's response shape into a
+  `record_step()` call; they never touch `Trace`/`Step` internals directly.
+- `adapters/openai_adapter.py`: parses the OpenAI chat-completions
+  tool-calling shape (`choices[0].message.tool_calls`, `.content`,
+  `usage.{prompt_tokens,completion_tokens}`).
+- `adapters/anthropic_adapter.py`: parses the Anthropic Messages API shape
+  (`content` blocks of type `text`/`tool_use`, `usage.{input_tokens,
+  output_tokens}`) -- correctly captures a text block as `reasoning` even
+  when a `tool_use` block is also present in the same response.
+- `adapters/groq_adapter.py`: thin re-export of the OpenAI adapter under a
+  Groq-specific name, since Groq's API is OpenAI-compatible -- no
+  reimplementation needed, just a name that reads naturally in a Groq loop.
+- Every adapter accepts BOTH a real SDK response object (attribute access --
+  what `openai>=1.0`/`anthropic>=0.25` actually return) and a plain dict
+  (`.model_dump()`, or a hand-built fixture) -- tested against both shapes
+  explicitly, not just one.
+- 14 new tests (recorder + all three adapters, dict-shaped and
+  SimpleNamespace-shaped fixtures for each).
+- Known limitation, documented rather than silently handled: only the first
+  tool call in a response is recorded as that step's call. Parallel
+  tool-calling isn't split into multiple steps yet.
+
+41 tests total (was 27). README updated with a real before/after usage
+example showing a loop unchanged except for one `record_*_step()` call per
+turn.
+
 ## [0.1.0] -- Trace schema + deterministic waste checks
 - `loopcheck/trace.py`: `Step`/`Trace` dataclasses -- a flat, framework-agnostic
   JSON schema. No SDK integration, no OpenTelemetry collector: any hand-rolled

@@ -30,6 +30,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the running detail.
 | Version | Adds |
 |---|---|
 | **v0.1** | Trace schema (framework-agnostic JSON) + `duplicate_calls` (exact repeat detection) + `loop_thrash` (same-tool-hammered-repeatedly detection), text/JSON report, cost estimation, CI-gate exit code |
+| **v0.2** | `TraceRecorder` + adapters for OpenAI, Anthropic, and Groq tool-calling responses -- record a trace directly from your real loop, no hand-written JSON |
 
 ## Quickstart
 
@@ -39,6 +40,48 @@ pip install -e ".[dev]"
 loopcheck analyze samples/wasteful_trace.json
 loopcheck analyze samples/clean_trace.json --json report.json --fail-on medium
 ```
+
+## Recording a trace from a real loop (v0.2+)
+
+You don't have to hand-write the trace JSON. `TraceRecorder` plus a small
+per-provider adapter turns your existing tool-calling loop into a trace with
+three extra lines, whatever provider you're on:
+
+```python
+from loopcheck.recorder import TraceRecorder
+from loopcheck.adapters.openai_adapter import record_openai_step
+# from loopcheck.adapters.anthropic_adapter import record_anthropic_step
+# from loopcheck.adapters.groq_adapter import record_groq_step
+
+rec = TraceRecorder(agent_name="research-bot", goal=user_goal, model="gpt-4o-mini",
+                     input_cost_per_1k=0.00015, output_cost_per_1k=0.0006)
+
+while True:
+    response = client.chat.completions.create(...)   # your existing call, unchanged
+    tool_result, is_error = None, False
+    if response.choices[0].message.tool_calls:
+        tool_result, is_error = run_your_tool(response)  # your existing tool dispatch, unchanged
+
+    step = record_openai_step(rec, response, tool_result=tool_result, is_error=is_error)
+    if step.tool_name is None:
+        break   # final answer
+
+rec.save("trace.json")
+```
+
+```bash
+loopcheck analyze trace.json
+```
+
+Each adapter accepts either the real SDK response object (attribute access,
+what `openai>=1.0`/`anthropic>=0.25` actually return) or a plain dict (e.g.
+`response.model_dump()`, or a hand-built test fixture) -- both work
+identically. Groq's API is OpenAI-compatible, so `groq_adapter.py` is a thin
+re-export of the OpenAI one under a name that reads naturally in a Groq loop.
+
+Known v0.2 limitation: only the first tool call in a response is recorded.
+Parallel tool-calling (a model requesting multiple tool calls in one turn)
+isn't split into multiple steps yet -- see CHANGELOG for the plan.
 
 ## The trace format
 
