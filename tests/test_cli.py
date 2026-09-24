@@ -55,7 +55,7 @@ def test_missing_trace_file_exits_2():
 def test_version_flag():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "0.5.0" in result.stdout
+    assert "0.6.0" in result.stdout
 
 
 def test_judge_flag_without_api_key_skips_gracefully(monkeypatch):
@@ -115,3 +115,69 @@ def test_compare_json_output_written_and_valid(tmp_path):
 def test_compare_missing_file_exits_2():
     result = runner.invoke(app, ["compare", "samples/does_not_exist.json", "samples/clean_trace.json"])
     assert result.exit_code == 2
+
+
+import shutil
+
+
+def _make_trace_dir(tmp_path, files):
+    d = tmp_path / "traces"
+    d.mkdir()
+    for src_name, dest_name in files:
+        shutil.copy(f"samples/{src_name}", d / dest_name)
+    return d
+
+
+def test_report_aggregates_across_directory(tmp_path):
+    d = _make_trace_dir(tmp_path, [
+        ("clean_trace.json", "run1.json"),
+        ("wasteful_trace.json", "run2.json"),
+    ])
+    result = runner.invoke(app, ["report", str(d)])
+    assert result.exit_code == 0
+    assert "2 trace(s)" in result.stdout
+    assert "1 with findings" in result.stdout
+
+
+def test_report_empty_directory_exits_2(tmp_path):
+    d = tmp_path / "empty"
+    d.mkdir()
+    result = runner.invoke(app, ["report", str(d)])
+    assert result.exit_code == 2
+
+
+def test_report_fail_on_exits_nonzero_when_threshold_met(tmp_path):
+    d = _make_trace_dir(tmp_path, [("wasteful_trace.json", "run1.json")])
+    result = runner.invoke(app, ["report", str(d), "--fail-on", "medium"])
+    assert result.exit_code == 1
+
+
+def test_report_fail_on_exits_zero_on_all_clean(tmp_path):
+    d = _make_trace_dir(tmp_path, [("clean_trace.json", "run1.json")])
+    result = runner.invoke(app, ["report", str(d), "--fail-on", "medium"])
+    assert result.exit_code == 0
+
+
+def test_report_json_output_written_and_valid(tmp_path):
+    d = _make_trace_dir(tmp_path, [
+        ("clean_trace.json", "run1.json"),
+        ("wasteful_trace.json", "run2.json"),
+    ])
+    out = tmp_path / "rollup.json"
+    result = runner.invoke(app, ["report", str(d), "--json", str(out)])
+    assert result.exit_code == 0
+    data = json.loads(out.read_text())
+    assert data["trace_count"] == 2
+    assert "duplicate_calls" in data["findings_by_check"]
+
+
+def test_report_top_n_limits_worst_traces(tmp_path):
+    d = _make_trace_dir(tmp_path, [
+        ("wasteful_trace.json", "run1.json"),
+        ("wasteful_trace_v2.json", "run2.json"),
+    ])
+    out = tmp_path / "rollup.json"
+    result = runner.invoke(app, ["report", str(d), "--json", str(out), "--top", "1"])
+    assert result.exit_code == 0
+    data = json.loads(out.read_text())
+    assert len(data["worst_traces"]) == 1

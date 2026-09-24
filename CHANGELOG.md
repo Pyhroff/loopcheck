@@ -5,6 +5,29 @@ stage is a small, working, tested slice rather than one big-bang commit.
 
 ## [Unreleased]
 
+## [0.6.0] -- Fleet-level rollup across a directory of traces
+- `aggregate.py`: `aggregate(entries, top_n=5) -> AggregateResult` --
+  total/wasted cost across a batch, findings tallied by check and by tool,
+  and the worst individual traces by wasted cost (zero-waste traces
+  excluded). Takes already-checked `(label, trace, findings)` triples, so
+  it works identically whether the caller ran deterministic-only checks or
+  included a judge -- same design as compare.py.
+- `report.py`: `render_aggregate`/`to_json_aggregate`.
+- `loopcheck report <trace_dir> [--json PATH] [--fail-on LEVEL] [--top N]`
+  -- globs every `*.json` in the directory, runs the deterministic checks
+  on each, and rolls the results up. `--fail-on` here gates on any SINGLE
+  trace in the batch meeting the threshold, distinct from `compare
+  --fail-on-regression`'s "did this get worse" and `analyze --fail-on`'s
+  "is this one run bad."
+- Motivation: `analyze` (one run) and `compare` (two runs) both miss an
+  agent that bleeds money steadily across many runs without any single run
+  being bad enough to trip a threshold -- `report` is the rollup that
+  catches that.
+- 15 new tests (aggregate.py tallying and sorting logic, report rendering,
+  CLI `report` command against a real temp directory of sample traces).
+
+102 tests total (was 87).
+
 ## [0.5.0] -- Regression detection between two runs
 - `findings.py`: `Finding` gains a `tool` field, populated by all three
   checks -- gives every finding a stable fingerprint that survives step

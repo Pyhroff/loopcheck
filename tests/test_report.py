@@ -81,3 +81,36 @@ def test_to_json_comparison_shape():
     assert data["is_regression"] is True
     assert data["delta_cost"] == 0.5
     assert len(data["new_findings"]) == 1
+
+
+from loopcheck.aggregate import aggregate
+from loopcheck.report import render_aggregate, to_json_aggregate
+
+
+def test_render_aggregate_clean_batch():
+    trace = Trace(agent_name="a", goal="g")
+    result = aggregate([("a.json", trace, [])])
+    text = render_aggregate(result)
+    assert "No waste detected across any trace" in text
+
+
+def test_render_aggregate_shows_breakdowns_and_worst_traces():
+    trace = Trace(agent_name="a", goal="g", input_cost_per_1k=1.0, output_cost_per_1k=0.0)
+    findings = [Finding(check="duplicate_calls", severity=Severity.HIGH, title="t", detail="d",
+                         step_indices=[0], wasted_cost=0.5, tool="search")]
+    result = aggregate([("worst.json", trace, findings)])
+    text = render_aggregate(result)
+    assert "duplicate_calls" in text
+    assert "search" in text
+    assert "worst.json" in text
+
+
+def test_to_json_aggregate_shape():
+    trace = Trace(agent_name="a", goal="g")
+    findings = [Finding(check="loop_thrash", severity=Severity.MEDIUM, title="t", detail="d",
+                         step_indices=[0], wasted_cost=0.2, tool="fetch")]
+    result = aggregate([("x.json", trace, findings)])
+    data = json.loads(to_json_aggregate(result))
+    assert data["trace_count"] == 1
+    assert data["findings_by_check"] == {"loop_thrash": 1}
+    assert data["worst_traces"][0]["label"] == "x.json"

@@ -5,12 +5,14 @@ loopcheck -- zero-instrumentation waste auditor for hand-rolled agent loops.
   loopcheck analyze trace.json --json report.json --fail-on medium
   loopcheck analyze trace.json --judge groq   # needs GROQ_API_KEY
   loopcheck compare before.json after.json --fail-on-regression
+  loopcheck report traces/ --json rollup.json
 
 v0.1: trace schema + duplicate_calls + loop_thrash checks, text/JSON report, CI-gate exit code.
 v0.2: record traces directly from OpenAI/Anthropic/Groq loops (adapters), not just hand-written JSON.
 v0.3: parallel tool-call support (record_*_turn).
 v0.4: --judge for the semantic_redundancy check against a live model.
-v0.5: `compare` -- regression detection between two runs of the same agent. <- current
+v0.5: `compare` -- regression detection between two runs of the same agent.
+v0.6: `report` -- fleet-level rollup across a directory of traces. <- current
 See CHANGELOG.md.
 """
 
@@ -24,12 +26,20 @@ import typer
 from rich.console import Console
 
 from loopcheck import __version__
+from loopcheck.aggregate import aggregate
 from loopcheck.checks.duplicate_calls import check_duplicate_calls
 from loopcheck.checks.loop_thrash import check_loop_thrash
 from loopcheck.checks.semantic_redundancy import check_semantic_redundancy
 from loopcheck.compare import compare_findings
 from loopcheck.findings import Finding, Severity
-from loopcheck.report import render_comparison, render_text, to_json, to_json_comparison
+from loopcheck.report import (
+    render_aggregate,
+    render_comparison,
+    render_text,
+    to_json,
+    to_json_aggregate,
+    to_json_comparison,
+)
 from loopcheck.trace import Trace
 
 app = typer.Typer(
@@ -153,6 +163,50 @@ def compare(
         console.print(f"\n[dim]JSON comparison report written to {json_out}[/]")
 
     if fail_on_regression and result.is_regression:
+        raise typer.Exit(1)
+
+
+@app.command()
+def report(
+    trace_dir: Path = typer.Argument(..., help="Directory of trace JSON files to aggregate."),
+    json_out: Optional[Path] = typer.Option(None, "--json", help="Write JSON rollup report to this path"),
+    fail_on: Optional[str] = typer.Option(
+        None, "--fail-on", help="Exit 1 if any single trace has a finding at/above this severity "
+                                 "(info|low|medium|high). For CI gates over a batch."
+    ),
+    top: int = typer.Option(5, "--top", help="How many worst-offending traces to list."),
+):
+    """Aggregate waste across every *.json trace in a directory -- where the money's
+    actually going across a batch of runs, not just one."""
+    files = sorted(trace_dir.glob("*.json"))
+    if not files:
+        console.print(f"[red]No .json trace files found in {trace_dir}[/]")
+        raise typer.Exit(2)
+
+    entries = []
+    any_over_threshold = False
+    order = ["info", "low", "medium", "high"]
+    threshold = order.index(fail_on.lower()) if fail_on else None
+
+    for f in files:
+        try:
+            trace = Trace.load(f)
+        except Exception as exc:  # noqa: BLE001
+            console.print(f"[red]Could not read {f}:[/] {exc}")
+            raise typer.Exit(2)
+        findings = run_checks(trace)
+        entries.append((f.name, trace, findings))
+        if threshold is not None and any(order.index(fnd.severity.value) >= threshold for fnd in findings):
+            any_over_threshold = True
+
+    result = aggregate(entries, top_n=top)
+    console.print(render_aggregate(result, top_n=top))
+
+    if json_out:
+        json_out.write_text(to_json_aggregate(result), encoding="utf-8")
+        console.print(f"\n[dim]JSON rollup report written to {json_out}[/]")
+
+    if fail_on and any_over_threshold:
         raise typer.Exit(1)
 
 

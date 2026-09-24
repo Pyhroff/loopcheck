@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from loopcheck.aggregate import AggregateResult
 from loopcheck.compare import ComparisonResult
 from loopcheck.findings import Finding, Severity
 from loopcheck.trace import Trace
@@ -125,4 +126,51 @@ def to_json_comparison(before_trace: Trace, after_trace: Trace, result: Comparis
         "is_regression": result.is_regression,
         "new_findings": [_f(f) for f in sort_findings(result.new_findings)],
         "resolved_findings": [_f(f) for f in sort_findings(result.resolved_findings)],
+    }, indent=2)
+
+
+def render_aggregate(result: AggregateResult, top_n: int = 5) -> str:
+    lines = [
+        f"[bold]loopcheck report[/] -- {result.trace_count} trace(s), "
+        f"{result.traces_with_findings} with findings",
+        "",
+        f"Total cost: ${result.total_cost:.4f}  |  Wasted: ${result.total_wasted_cost:.4f} "
+        f"({result.wasted_pct:.1f}%)",
+        "",
+    ]
+
+    if result.findings_by_check:
+        lines.append("[bold]By check:[/]")
+        for check, count in sorted(result.findings_by_check.items(), key=lambda kv: kv[1], reverse=True):
+            lines.append(f"  {check:20} {count}")
+        lines.append("")
+
+    if result.findings_by_tool:
+        lines.append("[bold]By tool:[/]")
+        for tool, count in sorted(result.findings_by_tool.items(), key=lambda kv: kv[1], reverse=True):
+            lines.append(f"  {tool:20} {count}")
+        lines.append("")
+
+    if result.worst_traces:
+        lines.append(f"[bold]Worst {min(top_n, len(result.worst_traces))} trace(s) by wasted cost:[/]")
+        for label, wasted in result.worst_traces[:top_n]:
+            lines.append(f"  [yellow]${wasted:.4f}[/]  {label}")
+        lines.append("")
+
+    if not result.findings_by_check:
+        lines.append("[green]No waste detected across any trace in this batch.[/]")
+
+    return "\n".join(lines).rstrip()
+
+
+def to_json_aggregate(result: AggregateResult) -> str:
+    return json.dumps({
+        "trace_count": result.trace_count,
+        "total_cost": result.total_cost,
+        "total_wasted_cost": result.total_wasted_cost,
+        "wasted_pct": result.wasted_pct,
+        "traces_with_findings": result.traces_with_findings,
+        "findings_by_check": result.findings_by_check,
+        "findings_by_tool": result.findings_by_tool,
+        "worst_traces": [{"label": label, "wasted_cost": wasted} for label, wasted in result.worst_traces],
     }, indent=2)

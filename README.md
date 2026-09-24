@@ -34,6 +34,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the running detail.
 | **v0.3** | Parallel tool-call support -- `record_*_turn()` fans every tool call in a single model response out into its own step, sharing a `turn` number |
 | **v0.4** | `semantic_redundancy` -- an opt-in, judge-backed check for redundant calls that duplicate_calls can't see (different args, same already-answered sub-goal), via `--judge groq` |
 | **v0.5** | `compare` -- regression detection between two runs of the same agent (e.g. before/after a prompt change), `--fail-on-regression` for CI |
+| **v0.6** | `report` -- aggregate waste across a directory of traces (by check, by tool, worst offenders), the fleet-level view |
 
 ## Quickstart
 
@@ -190,6 +191,25 @@ matches or invent fake ones. A finding present in `after` with no match in
 a new finding appeared or total wasted cost went up, even if some other
 finding also got resolved in the same run.
 
+## Aggregating across many runs (v0.6+)
+
+`analyze` is one run, `compare` is two. `report` is however many you have --
+point it at a directory of trace files and it rolls waste up across the
+whole batch: total cost and wasted cost, which check fires most, which tool
+is the worst offender, and the worst individual traces by wasted cost.
+This is the view that catches an agent bleeding money steadily across many
+runs even when no single run is bad enough to trip `analyze --fail-on`:
+
+```bash
+loopcheck report traces/
+loopcheck report traces/ --json rollup.json --fail-on high --top 10
+```
+
+`--fail-on` here gates on any SINGLE trace in the batch having a finding at
+or above that severity (a per-run check applied across the batch), distinct
+from `compare --fail-on-regression`'s "did this get worse" and `analyze
+--fail-on`'s "is this one run bad."
+
 ## CLI reference
 
 ```
@@ -203,6 +223,11 @@ loopcheck analyze <trace.json>
 loopcheck compare <before.json> <after.json>
   --json PATH             write a JSON comparison report
   --fail-on-regression    exit 1 if the after run has a new finding or higher wasted cost
+
+loopcheck report <trace_dir>
+  --json PATH       write a JSON rollup report
+  --fail-on LEVEL   exit 1 if any single trace in the batch has a finding >= LEVEL
+  --top N           how many worst-offending traces to list [default: 5]
 ```
 
 ## Project structure
