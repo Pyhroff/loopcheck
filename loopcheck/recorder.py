@@ -40,6 +40,7 @@ class TraceRecorder:
             input_cost_per_1k=input_cost_per_1k,
             output_cost_per_1k=output_cost_per_1k,
         )
+        self._next_turn = 0
 
     def record_step(
         self,
@@ -50,9 +51,19 @@ class TraceRecorder:
         is_error: bool = False,
         input_tokens: int = 0,
         output_tokens: int = 0,
+        turn: Optional[int] = None,
     ) -> Step:
+        """Record a single step. If `turn` is omitted, this step gets its own
+        fresh turn number (the common case: one model response, one step).
+        Pass an explicit `turn` to group several steps under the same
+        model-turn -- record_parallel_steps() does this for you."""
+        t = turn if turn is not None else self._next_turn
+        if turn is None:
+            self._next_turn += 1
+
         step = Step(
             index=len(self.trace.steps),
+            turn=t,
             reasoning=reasoning,
             tool_name=tool_name,
             tool_args=tool_args or {},
@@ -63,6 +74,18 @@ class TraceRecorder:
         )
         self.trace.steps.append(step)
         return step
+
+    def record_parallel_steps(self, calls: list[dict[str, Any]]) -> list[Step]:
+        """Record several tool calls that came from ONE model response
+        (parallel tool-calling) -- they all share a single turn number, so
+        checks and reports can tell this apart from the model looping
+        across separate turns. `calls` is a list of record_step()-style
+        kwargs dicts, in the order the model requested them."""
+        if not calls:
+            return []
+        t = self._next_turn
+        self._next_turn += 1
+        return [self.record_step(turn=t, **kwargs) for kwargs in calls]
 
     def save(self, path: Path) -> None:
         import json

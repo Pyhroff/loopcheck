@@ -31,6 +31,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the running detail.
 |---|---|
 | **v0.1** | Trace schema (framework-agnostic JSON) + `duplicate_calls` (exact repeat detection) + `loop_thrash` (same-tool-hammered-repeatedly detection), text/JSON report, cost estimation, CI-gate exit code |
 | **v0.2** | `TraceRecorder` + adapters for OpenAI, Anthropic, and Groq tool-calling responses -- record a trace directly from your real loop, no hand-written JSON |
+| **v0.3** | Parallel tool-call support -- `record_*_turn()` fans every tool call in a single model response out into its own step, sharing a `turn` number |
 
 ## Quickstart
 
@@ -79,9 +80,30 @@ what `openai>=1.0`/`anthropic>=0.25` actually return) or a plain dict (e.g.
 identically. Groq's API is OpenAI-compatible, so `groq_adapter.py` is a thin
 re-export of the OpenAI one under a name that reads naturally in a Groq loop.
 
-Known v0.2 limitation: only the first tool call in a response is recorded.
-Parallel tool-calling (a model requesting multiple tool calls in one turn)
-isn't split into multiple steps yet -- see CHANGELOG for the plan.
+`record_openai_step`/`record_anthropic_step`/`record_groq_step` record only
+the FIRST tool call in a response -- fine when your loop never asks for more
+than one tool at a time. If the model can request several tools in a single
+response (parallel tool-calling), use the turn-aware versions instead:
+`record_openai_turn`, `record_anthropic_turn`, `record_groq_turn`. Each fans
+every tool call in that response out into its own step, all sharing one
+`turn` number, so `duplicate_calls`/`loop_thrash` still see each call
+individually while a report can tell "asked for 3 things at once" apart
+from "looped 3 times":
+
+```python
+from loopcheck.adapters.openai_adapter import record_openai_turn
+
+response = client.chat.completions.create(...)
+results = [run_your_tool(call) for call in response.choices[0].message.tool_calls or []]
+steps = record_openai_turn(rec, response, tool_results=results)
+if not steps or steps[0].tool_name is None:
+    break   # final answer
+```
+
+Token usage in a response describes the whole API call, not each individual
+tool request within it, so `record_*_turn()` attributes it entirely to the
+first step in the turn and 0 to the rest -- summing a trace's cost never
+double-counts a parallel turn's usage.
 
 ## The trace format
 

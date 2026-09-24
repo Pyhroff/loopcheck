@@ -9,6 +9,13 @@ just a JSON file.
 A Step is one iteration of the agent's loop: what it reasoned (optional --
 not every framework surfaces this), which tool it called (or None if it
 gave a final answer), with what arguments, and what came back.
+
+`turn` (v0.3+) distinguishes the model-turn a step belongs to from its flat
+`index`: a single model response can request several tool calls at once
+(parallel tool-calling), which loopcheck records as several Steps with
+distinct `index` values but the same `turn` -- so a trace stays a flat,
+easy-to-read list, while checks and reports can still tell "the model asked
+for 3 things at once" apart from "the model looped 3 times."
 """
 
 from __future__ import annotations
@@ -22,6 +29,7 @@ from typing import Any, Optional
 @dataclass
 class Step:
     index: int
+    turn: int = 0                        # which model-turn this step belongs to (v0.3+; see module docstring)
     reasoning: Optional[str] = None      # the model's stated plan/thought for this step, if captured
     tool_name: Optional[str] = None      # None means this step was the final answer, not a tool call
     tool_args: dict[str, Any] = field(default_factory=dict)
@@ -34,6 +42,7 @@ class Step:
     def from_dict(cls, d: dict[str, Any]) -> "Step":
         return cls(
             index=d["index"],
+            turn=d.get("turn", d["index"]),
             reasoning=d.get("reasoning"),
             tool_name=d.get("tool_name"),
             tool_args=d.get("tool_args", {}),
@@ -46,6 +55,7 @@ class Step:
     def to_dict(self) -> dict[str, Any]:
         return {
             "index": self.index,
+            "turn": self.turn,
             "reasoning": self.reasoning,
             "tool_name": self.tool_name,
             "tool_args": self.tool_args,

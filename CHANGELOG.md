@@ -5,6 +5,35 @@ stage is a small, working, tested slice rather than one big-bang commit.
 
 ## [Unreleased]
 
+## [0.3.0] -- Parallel tool-call support
+- `trace.py`: `Step` gains a `turn` field -- distinguishes the model-turn a
+  step belongs to from its flat `index`, so several tool calls requested in
+  one model response can be recorded as separate steps that share a turn.
+  Backward compatible: a trace with no `turn` field (v0.1/v0.2) loads with
+  `turn` defaulting to each step's own `index`.
+- `recorder.py`: `TraceRecorder.record_parallel_steps(calls)` records a
+  batch of steps under one shared turn number; `record_step()` still gives
+  each call its own turn by default, so mixing single and parallel calls in
+  one trace keeps turn numbers consistent throughout.
+- `adapters/openai_adapter.py`, `adapters/anthropic_adapter.py`,
+  `adapters/groq_adapter.py`: each gains a `record_*_turn()` function that
+  fans out EVERY tool call in a response (not just the first) into its own
+  step. The single-call `record_*_step()` functions are unchanged --
+  existing v0.1/v0.2 code and traces keep working exactly as before.
+- Token usage in a parallel turn is attributed entirely to the first step
+  and 0 to the rest (a response's `usage` describes the whole API call, not
+  each tool request within it) -- documented explicitly so summing a
+  trace's cost never silently double-counts.
+- `duplicate_calls` correctly flags two identical calls requested in the
+  SAME turn, not just across separate turns -- a model asking for the same
+  tool+args twice in one response is still waste.
+- 16 new tests (recorder turn-tracking, both `record_*_turn()` adapters
+  against parallel-call fixtures, groq's re-export, and the same-turn
+  duplicate-detection case).
+
+57 tests total (was 41). Closes the limitation v0.2's README flagged and
+left undone rather than hidden.
+
 ## [0.2.0] -- Framework adapters
 - `loopcheck/recorder.py`: `TraceRecorder` -- the shared core every adapter
   builds on (`record_step()` appends a `Step`, `.save()` writes trace JSON).

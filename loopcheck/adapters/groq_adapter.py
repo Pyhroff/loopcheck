@@ -8,5 +8,6 @@ making the reader go find out that Groq == OpenAI shape for themselves.
 from __future__ import annotations
 
 from loopcheck.adapters.openai_adapter import record_openai_step as record_groq_step
+from loopcheck.adapters.openai_adapter import record_openai_turn as record_groq_turn
 
-__all__ = ["record_groq_step"]
+__all__ = ["record_groq_step", "record_groq_turn"]

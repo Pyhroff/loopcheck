@@ -66,3 +66,41 @@ def test_only_first_tool_use_block_is_recorded():
     rec = TraceRecorder(agent_name="a", goal="g")
     step = record_anthropic_step(rec, response)
     assert step.tool_name == "first_tool"
+
+
+from loopcheck.adapters.anthropic_adapter import record_anthropic_turn
+from loopcheck.recorder import TraceRecorder
+
+
+def _parallel_tool_use_response():
+    return {
+        "content": [
+            {"type": "text", "text": "Checking both cities."},
+            {"type": "tool_use", "name": "get_weather", "input": {"city": "Paris"}},
+            {"type": "tool_use", "name": "get_weather", "input": {"city": "Tokyo"}},
+        ],
+        "usage": {"input_tokens": 350, "output_tokens": 45},
+    }
+
+
+def test_turn_fans_out_all_tool_use_blocks():
+    rec = TraceRecorder(agent_name="a", goal="g")
+    steps = record_anthropic_turn(rec, _parallel_tool_use_response(), tool_results=["18C", "24C"])
+    assert len(steps) == 2
+    assert steps[0].tool_args == {"city": "Paris"}
+    assert steps[1].tool_args == {"city": "Tokyo"}
+    assert steps[0].turn == steps[1].turn
+
+
+def test_turn_usage_attributed_only_to_first_block():
+    rec = TraceRecorder(agent_name="a", goal="g")
+    steps = record_anthropic_turn(rec, _parallel_tool_use_response())
+    assert steps[0].input_tokens == 350
+    assert steps[1].input_tokens == 0
+
+
+def test_turn_no_tool_use_returns_final_answer_step():
+    rec = TraceRecorder(agent_name="a", goal="g")
+    steps = record_anthropic_turn(rec, _final_answer_response())
+    assert len(steps) == 1
+    assert steps[0].tool_name is None

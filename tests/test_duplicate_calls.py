@@ -58,3 +58,19 @@ def test_multiple_distinct_tools_each_flagged_separately():
     ])
     findings = check_duplicate_calls(trace)
     assert {f.step_indices[0] for f in findings} == {2, 3}
+
+
+def test_identical_calls_within_one_parallel_turn_are_flagged():
+    """If a model requests the same tool+args twice in ONE turn (a
+    modeling mistake, not a looping one), that's still waste -- turn
+    number doesn't exempt it from duplicate detection."""
+    from loopcheck.recorder import TraceRecorder
+
+    rec = TraceRecorder(agent_name="t", goal="g", input_cost_per_1k=1.0, output_cost_per_1k=0.0)
+    rec.record_parallel_steps([
+        {"tool_name": "search", "tool_args": {"q": "a"}, "input_tokens": 1000},
+        {"tool_name": "search", "tool_args": {"q": "a"}, "input_tokens": 1000},
+    ])
+    findings = check_duplicate_calls(rec.trace)
+    assert len(findings) == 1
+    assert findings[0].step_indices == [1]
