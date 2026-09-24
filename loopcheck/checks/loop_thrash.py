@@ -46,6 +46,7 @@ def check_loop_thrash(trace: Trace, threshold: int = DEFAULT_THRESHOLD) -> list[
             check="loop_thrash",
             severity=Severity.HIGH if count >= threshold * 2 else Severity.MEDIUM,
             title="Tool called far more than expected for a single trace",
+            tool=tool_name,
             detail=(
                 f"Tool '{tool_name}' was called {count} times in one trace "
                 f"(steps {indices}) -- past {threshold} calls to the same "

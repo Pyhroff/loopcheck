@@ -5,6 +5,32 @@ stage is a small, working, tested slice rather than one big-bang commit.
 
 ## [Unreleased]
 
+## [0.5.0] -- Regression detection between two runs
+- `findings.py`: `Finding` gains a `tool` field, populated by all three
+  checks -- gives every finding a stable fingerprint that survives step
+  positions shifting between two runs of "the same" trace.
+- `compare.py`: `compare_findings(before, after) -> ComparisonResult`.
+  Matches findings by `(check, tool, title)`, not `step_indices`. Splits
+  into `new_findings` (regressions -- in after, not before) and
+  `resolved_findings` (improvements -- in before, not after), plus a wasted-
+  cost delta. `.is_regression` is true if anything got worse: a new finding
+  appeared, or total wasted cost went up, even if something else also
+  improved in the same run.
+- `report.py`: `render_comparison`/`to_json_comparison`.
+- `loopcheck compare <before.json> <after.json> [--json PATH]
+  [--fail-on-regression]` -- a CI gate specifically for "did my prompt/model
+  change make this agent more wasteful," distinct from `analyze
+  --fail-on`'s "is this run currently over a severity threshold."
+- New sample (`samples/wasteful_trace_v2.json`) exercising the realistic
+  mixed case: one issue resolved (fewer redundant searches) while a
+  different, new one appears (an unrelated duplicate call) -- confirms
+  `compare` reports both correctly rather than only netting them out.
+- 16 new tests (compare.py fingerprint matching and regression logic, CLI
+  compare command against real sample traces both directions, report
+  rendering).
+
+87 tests total (was 71).
+
 ## [0.4.0] -- Judge-backed semantic redundancy check
 - `loopcheck/judge.py`: `Judge` -- a small async Protocol (`.compare(goal,
   tool_name, args_a, result_a, args_b, result_b) -> JudgeVerdict`). Nothing

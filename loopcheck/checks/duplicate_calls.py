@@ -61,6 +61,7 @@ def check_duplicate_calls(trace: Trace) -> list[Finding]:
             check="duplicate_calls",
             severity=Severity.HIGH if len(wasted_indices) >= 2 else Severity.MEDIUM,
             title="Repeated tool call with identical arguments",
+            tool=tool_name,
             detail=(
                 f"Tool '{tool_name}' was called with the same arguments "
                 f"{dict(args_tuple)} at steps {indices}, after already "

@@ -1,0 +1,14 @@
+{
+  "agent_name": "research-bot",
+  "goal": "Summarize the top 3 causes of the 2026 chip shortage.",
+  "model": "gpt-4o-mini",
+  "input_cost_per_1k": 0.00015,
+  "output_cost_per_1k": 0.0006,
+  "steps": [
+    {"index": 0, "reasoning": "Search for causes.", "tool_name": "web_search", "tool_args": {"query": "2026 chip shortage causes"}, "tool_result": "Result set A", "input_tokens": 300, "output_tokens": 40},
+    {"index": 1, "reasoning": "Re-check the first result, forgot I already had it.", "tool_name": "web_search", "tool_args": {"query": "2026 chip shortage causes"}, "tool_result": "Result set A", "input_tokens": 310, "output_tokens": 40},
+    {"index": 2, "reasoning": "Check config for no clear reason -- new regression.", "tool_name": "read_config", "tool_args": {"path": "config.yaml"}, "tool_result": "irrelevant", "input_tokens": 100, "output_tokens": 10},
+    {"index": 3, "reasoning": "Check it again -- also new.", "tool_name": "read_config", "tool_args": {"path": "config.yaml"}, "tool_result": "irrelevant", "input_tokens": 100, "output_tokens": 10},
+    {"index": 4, "reasoning": "Answering now.", "tool_name": null, "tool_args": {}, "tool_result": "Top causes: fab capacity, geopolitical export controls, and EV demand surge.", "input_tokens": 400, "output_tokens": 80}
+  ]
+}

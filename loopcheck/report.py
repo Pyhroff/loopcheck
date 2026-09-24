@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from loopcheck.compare import ComparisonResult
 from loopcheck.findings import Finding, Severity
 from loopcheck.trace import Trace
 
@@ -64,7 +65,64 @@ def to_json(trace: Trace, findings: list[Finding]) -> str:
                 "detail": f.detail,
                 "step_indices": f.step_indices,
                 "wasted_cost": f.wasted_cost,
+                "tool": f.tool,
             }
             for f in findings
         ],
+    }, indent=2)
+
+
+def render_comparison(before_trace: Trace, after_trace: Trace, result: ComparisonResult) -> str:
+    lines = [
+        f"[bold]loopcheck compare[/] -- {before_trace.agent_name} -> {after_trace.agent_name}",
+        "",
+    ]
+
+    if result.new_findings:
+        lines.append("[red]Regressions (new since the before run):[/]")
+        for f in sort_findings(result.new_findings):
+            lines.append(f"  [red]+[/] {f.check:16} {f.title} (tool={f.tool})")
+        lines.append("")
+
+    if result.resolved_findings:
+        lines.append("[green]Resolved (present before, gone now):[/]")
+        for f in sort_findings(result.resolved_findings):
+            lines.append(f"  [green]-[/] {f.check:16} {f.title} (tool={f.tool})")
+        lines.append("")
+
+    if not result.new_findings and not result.resolved_findings:
+        lines.append("[dim]No change in findings between the two runs.[/]")
+        lines.append("")
+
+    delta = result.delta_cost
+    delta_str = f"+${delta:.4f}" if delta >= 0 else f"-${abs(delta):.4f}"
+    verdict = "[red]REGRESSION[/]" if result.is_regression else "[green]OK[/]"
+    lines.append(
+        f"Wasted cost: ${result.before_wasted_cost:.4f} -> ${result.after_wasted_cost:.4f} "
+        f"({delta_str})  {verdict}"
+    )
+    return "\n".join(lines)
+
+
+def to_json_comparison(before_trace: Trace, after_trace: Trace, result: ComparisonResult) -> str:
+    def _f(finding: Finding) -> dict:
+        return {
+            "check": finding.check,
+            "severity": finding.severity.value,
+            "title": finding.title,
+            "detail": finding.detail,
+            "step_indices": finding.step_indices,
+            "wasted_cost": finding.wasted_cost,
+            "tool": finding.tool,
+        }
+
+    return json.dumps({
+        "before_agent": before_trace.agent_name,
+        "after_agent": after_trace.agent_name,
+        "before_wasted_cost": result.before_wasted_cost,
+        "after_wasted_cost": result.after_wasted_cost,
+        "delta_cost": result.delta_cost,
+        "is_regression": result.is_regression,
+        "new_findings": [_f(f) for f in sort_findings(result.new_findings)],
+        "resolved_findings": [_f(f) for f in sort_findings(result.resolved_findings)],
     }, indent=2)

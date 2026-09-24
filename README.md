@@ -33,6 +33,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the running detail.
 | **v0.2** | `TraceRecorder` + adapters for OpenAI, Anthropic, and Groq tool-calling responses -- record a trace directly from your real loop, no hand-written JSON |
 | **v0.3** | Parallel tool-call support -- `record_*_turn()` fans every tool call in a single model response out into its own step, sharing a `turn` number |
 | **v0.4** | `semantic_redundancy` -- an opt-in, judge-backed check for redundant calls that duplicate_calls can't see (different args, same already-answered sub-goal), via `--judge groq` |
+| **v0.5** | `compare` -- regression detection between two runs of the same agent (e.g. before/after a prompt change), `--fail-on-regression` for CI |
 
 ## Quickstart
 
@@ -169,6 +170,26 @@ trace -- this check is deliberately a bounded sample of the risk, not an
 exhaustive audit. Requires the `judge` extra: `pip install
 "loopcheck[judge]"`.
 
+## Comparing two runs (v0.5+)
+
+A single `analyze` tells you the current state. `compare` tells you whether
+your last change -- a prompt tweak, a model swap, a new tool -- made things
+better or worse, which is the question that matters once you're iterating:
+
+```bash
+loopcheck compare before.json after.json
+loopcheck compare before.json after.json --fail-on-regression   # CI gate on prompt/model changes
+```
+
+Findings are matched between the two runs by `(check, tool, title)`, not
+step position -- step count and positions shift between runs even when
+nothing meaningful changed, so matching on that would either miss real
+matches or invent fake ones. A finding present in `after` with no match in
+`before` is a **regression**; one present in `before` with no match in
+`after` was **resolved**. `--fail-on-regression` fails the build if either
+a new finding appeared or total wasted cost went up, even if some other
+finding also got resolved in the same run.
+
 ## CLI reference
 
 ```
@@ -178,6 +199,10 @@ loopcheck analyze <trace.json>
   --judge PROVIDER      also run semantic_redundancy against a live model (currently: groq)
   --judge-model MODEL   model for --judge groq [default: openai/gpt-oss-120b]
   --max-judge-pairs N   cap on same-tool pairs compared by --judge [default: 20]
+
+loopcheck compare <before.json> <after.json>
+  --json PATH             write a JSON comparison report
+  --fail-on-regression    exit 1 if the after run has a new finding or higher wasted cost
 ```
 
 ## Project structure

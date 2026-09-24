@@ -4,11 +4,13 @@ loopcheck -- zero-instrumentation waste auditor for hand-rolled agent loops.
   loopcheck analyze trace.json
   loopcheck analyze trace.json --json report.json --fail-on medium
   loopcheck analyze trace.json --judge groq   # needs GROQ_API_KEY
+  loopcheck compare before.json after.json --fail-on-regression
 
 v0.1: trace schema + duplicate_calls + loop_thrash checks, text/JSON report, CI-gate exit code.
 v0.2: record traces directly from OpenAI/Anthropic/Groq loops (adapters), not just hand-written JSON.
 v0.3: parallel tool-call support (record_*_turn).
-v0.4: --judge for the semantic_redundancy check against a live model. <- current
+v0.4: --judge for the semantic_redundancy check against a live model.
+v0.5: `compare` -- regression detection between two runs of the same agent. <- current
 See CHANGELOG.md.
 """
 
@@ -25,8 +27,9 @@ from loopcheck import __version__
 from loopcheck.checks.duplicate_calls import check_duplicate_calls
 from loopcheck.checks.loop_thrash import check_loop_thrash
 from loopcheck.checks.semantic_redundancy import check_semantic_redundancy
+from loopcheck.compare import compare_findings
 from loopcheck.findings import Finding, Severity
-from loopcheck.report import render_text, to_json
+from loopcheck.report import render_comparison, render_text, to_json, to_json_comparison
 from loopcheck.trace import Trace
 
 app = typer.Typer(
@@ -118,6 +121,39 @@ async def _run_judge_check(trace: Trace, judge_name: str, judge_model: str, max_
 
     console.print("[dim]running semantic_redundancy check against a live model...[/]")
     return await check_semantic_redundancy(trace, judge, max_pairs=max_pairs)
+
+
+@app.command()
+def compare(
+    before_file: Path = typer.Argument(..., help="Trace JSON from the earlier/baseline run."),
+    after_file: Path = typer.Argument(..., help="Trace JSON from the later/changed run."),
+    json_out: Optional[Path] = typer.Option(None, "--json", help="Write JSON comparison report to this path"),
+    fail_on_regression: bool = typer.Option(
+        False, "--fail-on-regression", help="Exit 1 if the after run has any new finding or higher wasted cost "
+                                             "than the before run. For CI gates on prompt/model changes."
+    ),
+):
+    """Compare two traces of the same agent (e.g. before/after a prompt change) and report
+    whether waste got better or worse."""
+    try:
+        before_trace = Trace.load(before_file)
+        after_trace = Trace.load(after_file)
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]Could not read trace file:[/] {exc}")
+        raise typer.Exit(2)
+
+    before_findings = run_checks(before_trace)
+    after_findings = run_checks(after_trace)
+    result = compare_findings(before_findings, after_findings)
+
+    console.print(render_comparison(before_trace, after_trace, result))
+
+    if json_out:
+        json_out.write_text(to_json_comparison(before_trace, after_trace, result), encoding="utf-8")
+        console.print(f"\n[dim]JSON comparison report written to {json_out}[/]")
+
+    if fail_on_regression and result.is_regression:
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

@@ -41,3 +41,43 @@ def test_to_json_round_trips_shape():
     assert data["wasted_cost"] == 1.0
     assert len(data["findings"]) == 1
     assert data["findings"][0]["check"] == "duplicate_calls"
+
+
+from loopcheck.compare import compare_findings
+from loopcheck.report import render_comparison, to_json_comparison
+
+
+def test_render_comparison_no_change():
+    trace = Trace(agent_name="a", goal="g", steps=[])
+    result = compare_findings([], [])
+    text = render_comparison(trace, trace, result)
+    assert "No change" in text
+    assert "OK" in text
+
+
+def test_render_comparison_shows_regression_and_resolved():
+    before = Trace(agent_name="before-run", goal="g", steps=[])
+    after = Trace(agent_name="after-run", goal="g", steps=[])
+    result = compare_findings(
+        before=[Finding(check="loop_thrash", severity=Severity.MEDIUM, title="old issue",
+                         detail="d", step_indices=[0], tool="search")],
+        after=[Finding(check="duplicate_calls", severity=Severity.HIGH, title="new issue",
+                        detail="d", step_indices=[0], tool="fetch")],
+    )
+    text = render_comparison(before, after, result)
+    assert "new issue" in text
+    assert "old issue" in text
+    assert "REGRESSION" in text
+
+
+def test_to_json_comparison_shape():
+    trace = Trace(agent_name="a", goal="g", steps=[])
+    result = compare_findings(
+        before=[],
+        after=[Finding(check="duplicate_calls", severity=Severity.HIGH, title="t",
+                        detail="d", step_indices=[0], wasted_cost=0.5, tool="search")],
+    )
+    data = json.loads(to_json_comparison(trace, trace, result))
+    assert data["is_regression"] is True
+    assert data["delta_cost"] == 0.5
+    assert len(data["new_findings"]) == 1

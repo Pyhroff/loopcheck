@@ -61,6 +61,7 @@ async def check_semantic_redundancy(
             check="semantic_redundancy",
             severity=Severity.MEDIUM,
             title="Semantically redundant tool call (different arguments, same sub-goal)",
+            tool=a.tool_name,
             detail=(
                 f"Steps {a.index} and {b.index} both called '{a.tool_name}' with "
                 f"different arguments ({a.tool_args} vs {b.tool_args}), but the "
