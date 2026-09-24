@@ -5,6 +5,35 @@ stage is a small, working, tested slice rather than one big-bang commit.
 
 ## [Unreleased]
 
+## [0.4.0] -- Judge-backed semantic redundancy check
+- `loopcheck/judge.py`: `Judge` -- a small async Protocol (`.compare(goal,
+  tool_name, args_a, result_a, args_b, result_b) -> JudgeVerdict`). Nothing
+  else in loopcheck depends on a concrete implementation.
+- `checks/semantic_redundancy.py`: catches what duplicate_calls and
+  loop_thrash structurally can't -- two calls to the same tool with
+  DIFFERENT arguments that a judge decides chased the same already-answered
+  sub-goal. Bounded by `max_pairs` (default 20): comparing every same-tool
+  pair is O(n^2) judge calls, so this is a sample of the risk on a long
+  trace, not an exhaustive audit. Exact-duplicate-argument pairs are never
+  sent to the judge -- that's duplicate_calls' job.
+- `judges/groq_judge.py`: `GroqJudge`, the first concrete `Judge`, backed by
+  a real model over the Groq API. Fails closed (not redundant) on
+  unparseable model output rather than crashing the check.
+- `loopcheck analyze --judge groq` (needs `GROQ_API_KEY`, `pip install
+  "loopcheck[judge]"`) -- `--judge-model` and `--max-judge-pairs` to
+  configure it. Every deterministic check still runs with zero setup
+  regardless of whether `--judge` is passed.
+- 14 new tests -- semantic_redundancy against a fake in-memory Judge
+  (candidate-pair generation, exact-dup skipping, mixed verdicts),
+  GroqJudge's prompt-building and JSON-parsing (mocked client, no network),
+  and two CLI tests for graceful degradation (missing API key, unsupported
+  provider name).
+
+71 tests total (was 57). Same honest handling as mcpaudit's --dynamic
+check: this is the one piece of loopcheck that needs a live model and
+network access, and it's fully isolated behind the Judge Protocol so
+everything else stays free and deterministic.
+
 ## [0.3.0] -- Parallel tool-call support
 - `trace.py`: `Step` gains a `turn` field -- distinguishes the model-turn a
   step belongs to from its flat `index`, so several tool calls requested in

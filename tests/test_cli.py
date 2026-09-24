@@ -55,4 +55,17 @@ def test_missing_trace_file_exits_2():
 def test_version_flag():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "0.3.0" in result.stdout
+    assert "0.4.0" in result.stdout
+
+
+def test_judge_flag_without_api_key_skips_gracefully(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    result = runner.invoke(app, ["analyze", "samples/clean_trace.json", "--judge", "groq"])
+    assert result.exit_code == 0
+    assert "GROQ_API_KEY" in result.stdout
+
+
+def test_judge_flag_with_unsupported_provider_skips_gracefully():
+    result = runner.invoke(app, ["analyze", "samples/clean_trace.json", "--judge", "not-a-real-provider"])
+    assert result.exit_code == 0
+    assert "only supports" in result.stdout

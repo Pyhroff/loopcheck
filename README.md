@@ -32,6 +32,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the running detail.
 | **v0.1** | Trace schema (framework-agnostic JSON) + `duplicate_calls` (exact repeat detection) + `loop_thrash` (same-tool-hammered-repeatedly detection), text/JSON report, cost estimation, CI-gate exit code |
 | **v0.2** | `TraceRecorder` + adapters for OpenAI, Anthropic, and Groq tool-calling responses -- record a trace directly from your real loop, no hand-written JSON |
 | **v0.3** | Parallel tool-call support -- `record_*_turn()` fans every tool call in a single model response out into its own step, sharing a `turn` number |
+| **v0.4** | `semantic_redundancy` -- an opt-in, judge-backed check for redundant calls that duplicate_calls can't see (different args, same already-answered sub-goal), via `--judge groq` |
 
 ## Quickstart
 
@@ -142,10 +143,31 @@ A step with `"tool_name": null` is the agent's final answer, not a tool call.
 - **`loop_thrash`** -- flags a single tool called more than a threshold
   (default 4) times in one trace, even when no two calls are identical --
   the "stuck refining/retrying" pattern duplicate-detection alone can't see.
+- **`semantic_redundancy`** (v0.4+, opt-in) -- catches what the two checks
+  above structurally can't: two calls to the same tool with *different*
+  arguments that still chase the same already-answered sub-goal (e.g.
+  `search(q="chip shortage causes")` then later `search(q="reasons for the
+  chip shortage")`). This needs judgment about meaning, so it's the one
+  check that isn't free or deterministic -- it's opt-in, and every other
+  check works exactly the same with or without it configured.
 
-Both checks are fully deterministic (no LLM judge, no model variance, no
-API key needed) and attach an estimated wasted-cost figure when the trace
-includes token counts and per-1K pricing.
+`duplicate_calls` and `loop_thrash` are fully deterministic (no LLM judge,
+no model variance, no API key needed) and attach an estimated wasted-cost
+figure when the trace includes token counts and per-1K pricing.
+
+### Running the judge check
+
+```bash
+GROQ_API_KEY=... loopcheck analyze trace.json --judge groq
+```
+
+`Judge` (`loopcheck/judge.py`) is a small Protocol -- `GroqJudge` is the
+only implementation right now, but anything with an async `.compare()`
+method works. Comparisons are capped (`--max-judge-pairs`, default 20)
+since comparing every same-tool pair is O(n^2) judge calls on a long
+trace -- this check is deliberately a bounded sample of the risk, not an
+exhaustive audit. Requires the `judge` extra: `pip install
+"loopcheck[judge]"`.
 
 ## CLI reference
 
@@ -153,6 +175,9 @@ includes token counts and per-1K pricing.
 loopcheck analyze <trace.json>
   --json PATH       write a JSON report
   --fail-on LEVEL   exit 1 if any finding >= LEVEL (info|low|medium|high) -- for CI gates
+  --judge PROVIDER      also run semantic_redundancy against a live model (currently: groq)
+  --judge-model MODEL   model for --judge groq [default: openai/gpt-oss-120b]
+  --max-judge-pairs N   cap on same-tool pairs compared by --judge [default: 20]
 ```
 
 ## Project structure
@@ -172,12 +197,12 @@ tests/                     27 tests, all against real trace data
 
 ## Limitations
 
-- v0.1 has no framework adapters (LangChain callback handler, OpenAI/Anthropic
-  response parser) -- you write the trace JSON yourself for now. That's the
-  natural next version.
-- Deterministic checks only, by design, in v0.1 -- no LLM-judge check yet for
-  semantic redundancy (two calls that *look* different but pursue the same
-  already-answered sub-goal). That needs a live model and is a planned v0.2+.
+- `semantic_redundancy` only compares pairs within the SAME tool, and only
+  up to `--max-judge-pairs` of them -- it's a bounded sample, not an
+  exhaustive pairwise audit of a long trace.
+- `GroqJudge` is the only concrete `Judge` today; adding another provider
+  is a new class implementing the same small Protocol, not a loopcheck
+  code change.
 - Cost estimates are only as accurate as the token counts and per-1K prices
   you put in the trace; loopcheck doesn't call any pricing API.
 
