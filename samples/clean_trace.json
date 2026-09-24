@@ -1,0 +1,12 @@
+{
+  "agent_name": "weather-bot",
+  "goal": "What's the weather in Paris and Tokyo?",
+  "model": "gpt-4o-mini",
+  "input_cost_per_1k": 0.00015,
+  "output_cost_per_1k": 0.0006,
+  "steps": [
+    {"index": 0, "reasoning": "Need Paris weather first.", "tool_name": "get_weather", "tool_args": {"city": "Paris"}, "tool_result": "18C, cloudy", "input_tokens": 220, "output_tokens": 30},
+    {"index": 1, "reasoning": "Now Tokyo weather.", "tool_name": "get_weather", "tool_args": {"city": "Tokyo"}, "tool_result": "24C, clear", "input_tokens": 260, "output_tokens": 30},
+    {"index": 2, "reasoning": "Have both, answering.", "tool_name": null, "tool_args": {}, "tool_result": "Paris is 18C and cloudy; Tokyo is 24C and clear.", "input_tokens": 300, "output_tokens": 40}
+  ]
+}

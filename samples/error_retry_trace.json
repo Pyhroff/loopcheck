@@ -1,0 +1,12 @@
+{
+  "agent_name": "file-bot",
+  "goal": "Read config.yaml and summarize it.",
+  "model": "gpt-4o-mini",
+  "input_cost_per_1k": 0.00015,
+  "output_cost_per_1k": 0.0006,
+  "steps": [
+    {"index": 0, "reasoning": "Read the file.", "tool_name": "read_file", "tool_args": {"path": "config.yaml"}, "tool_result": "Error: file locked, try again", "is_error": true, "input_tokens": 200, "output_tokens": 20},
+    {"index": 1, "reasoning": "Retry, transient lock error.", "tool_name": "read_file", "tool_args": {"path": "config.yaml"}, "tool_result": "key: value\nother: 42", "input_tokens": 210, "output_tokens": 20},
+    {"index": 2, "reasoning": "Got it, summarizing.", "tool_name": null, "tool_args": {}, "tool_result": "config.yaml has two keys: key=value, other=42.", "input_tokens": 250, "output_tokens": 30}
+  ]
+}
