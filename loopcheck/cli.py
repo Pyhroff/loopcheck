@@ -6,13 +6,15 @@ loopcheck -- zero-instrumentation waste auditor for hand-rolled agent loops.
   loopcheck analyze trace.json --judge groq   # needs GROQ_API_KEY
   loopcheck compare before.json after.json --fail-on-regression
   loopcheck report traces/ --json rollup.json
+  loopcheck analyze trace.json --policy policy.json
 
 v0.1: trace schema + duplicate_calls + loop_thrash checks, text/JSON report, CI-gate exit code.
 v0.2: record traces directly from OpenAI/Anthropic/Groq loops (adapters), not just hand-written JSON.
 v0.3: parallel tool-call support (record_*_turn).
 v0.4: --judge for the semantic_redundancy check against a live model.
 v0.5: `compare` -- regression detection between two runs of the same agent.
-v0.6: `report` -- fleet-level rollup across a directory of traces. <- current
+v0.6: `report` -- fleet-level rollup across a directory of traces.
+v0.7: --policy to suppress reviewed/accepted findings across analyze/compare/report. <- current
 See CHANGELOG.md.
 """
 
@@ -32,6 +34,7 @@ from loopcheck.checks.loop_thrash import check_loop_thrash
 from loopcheck.checks.semantic_redundancy import check_semantic_redundancy
 from loopcheck.compare import compare_findings
 from loopcheck.findings import Finding, Severity
+from loopcheck.policy import Policy
 from loopcheck.report import (
     render_aggregate,
     render_comparison,
@@ -71,6 +74,16 @@ def run_checks(trace: Trace) -> list[Finding]:
     return findings
 
 
+def _load_policy(policy_file: Optional[Path]) -> Optional[Policy]:
+    if not policy_file:
+        return None
+    try:
+        return Policy.load(policy_file)
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]Could not read policy file:[/] {exc}")
+        raise typer.Exit(2)
+
+
 @app.command()
 def analyze(
     trace_file: Path = typer.Argument(..., help="Path to a loopcheck trace JSON file."),
@@ -88,6 +101,10 @@ def analyze(
     max_judge_pairs: int = typer.Option(
         20, "--max-judge-pairs", help="Cap on how many same-tool call pairs --judge will compare."
     ),
+    policy_file: Optional[Path] = typer.Option(
+        None, "--policy", help="JSON file of reviewed/accepted findings to suppress "
+                                "(see samples/example-policy.json)."
+    ),
 ):
     """Analyze a single agent trace for wasted tool calls."""
     try:
@@ -101,7 +118,14 @@ def analyze(
     if judge:
         findings += asyncio.run(_run_judge_check(trace, judge, judge_model, max_judge_pairs))
 
+    suppressed: list[Finding] = []
+    policy = _load_policy(policy_file)
+    if policy:
+        findings, suppressed = policy.apply(findings)
+
     console.print(render_text(trace, findings))
+    if suppressed:
+        console.print(f"[dim]{len(suppressed)} finding(s) suppressed by policy ({policy_file})[/]")
 
     if json_out:
         json_out.write_text(to_json(trace, findings), encoding="utf-8")
@@ -142,6 +166,10 @@ def compare(
         False, "--fail-on-regression", help="Exit 1 if the after run has any new finding or higher wasted cost "
                                              "than the before run. For CI gates on prompt/model changes."
     ),
+    policy_file: Optional[Path] = typer.Option(
+        None, "--policy", help="JSON file of reviewed/accepted findings to suppress from BOTH runs "
+                                "before comparing (see samples/example-policy.json)."
+    ),
 ):
     """Compare two traces of the same agent (e.g. before/after a prompt change) and report
     whether waste got better or worse."""
@@ -154,6 +182,12 @@ def compare(
 
     before_findings = run_checks(before_trace)
     after_findings = run_checks(after_trace)
+
+    policy = _load_policy(policy_file)
+    if policy:
+        before_findings, _ = policy.apply(before_findings)
+        after_findings, _ = policy.apply(after_findings)
+
     result = compare_findings(before_findings, after_findings)
 
     console.print(render_comparison(before_trace, after_trace, result))
@@ -175,6 +209,10 @@ def report(
                                  "(info|low|medium|high). For CI gates over a batch."
     ),
     top: int = typer.Option(5, "--top", help="How many worst-offending traces to list."),
+    policy_file: Optional[Path] = typer.Option(
+        None, "--policy", help="JSON file of reviewed/accepted findings to suppress from every trace "
+                                "before aggregating (see samples/example-policy.json)."
+    ),
 ):
     """Aggregate waste across every *.json trace in a directory -- where the money's
     actually going across a batch of runs, not just one."""
@@ -183,6 +221,7 @@ def report(
         console.print(f"[red]No .json trace files found in {trace_dir}[/]")
         raise typer.Exit(2)
 
+    policy = _load_policy(policy_file)
     entries = []
     any_over_threshold = False
     order = ["info", "low", "medium", "high"]
@@ -195,6 +234,8 @@ def report(
             console.print(f"[red]Could not read {f}:[/] {exc}")
             raise typer.Exit(2)
         findings = run_checks(trace)
+        if policy:
+            findings, _ = policy.apply(findings)
         entries.append((f.name, trace, findings))
         if threshold is not None and any(order.index(fnd.severity.value) >= threshold for fnd in findings):
             any_over_threshold = True

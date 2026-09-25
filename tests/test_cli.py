@@ -55,7 +55,7 @@ def test_missing_trace_file_exits_2():
 def test_version_flag():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "0.6.0" in result.stdout
+    assert "0.7.0" in result.stdout
 
 
 def test_judge_flag_without_api_key_skips_gracefully(monkeypatch):
@@ -181,3 +181,52 @@ def test_report_top_n_limits_worst_traces(tmp_path):
     assert result.exit_code == 0
     data = json.loads(out.read_text())
     assert len(data["worst_traces"]) == 1
+
+
+def test_analyze_policy_suppresses_matching_findings(tmp_path):
+    policy_file = tmp_path / "policy.json"
+    policy_file.write_text(json.dumps({"ignore": [{"tool": "web_search", "check": "loop_thrash"}]}), encoding="utf-8")
+
+    result = runner.invoke(app, ["analyze", "samples/wasteful_trace.json", "--policy", str(policy_file)])
+    assert result.exit_code == 0
+    assert "duplicate_calls" in result.stdout  # not suppressed
+    assert "loop_thrash" not in result.stdout  # suppressed
+    assert "suppressed by policy" in result.stdout
+
+
+def test_analyze_fail_on_respects_policy_suppression(tmp_path):
+    policy_file = tmp_path / "policy.json"
+    policy_file.write_text(json.dumps({"ignore": [{"tool": "*"}]}), encoding="utf-8")
+
+    result = runner.invoke(app, [
+        "analyze", "samples/wasteful_trace.json", "--policy", str(policy_file), "--fail-on", "medium",
+    ])
+    assert result.exit_code == 0
+
+
+def test_analyze_missing_policy_file_exits_2():
+    result = runner.invoke(app, ["analyze", "samples/clean_trace.json", "--policy", "samples/no-such-policy.json"])
+    assert result.exit_code == 2
+
+
+def test_compare_policy_removes_suppressed_findings_from_both_sides(tmp_path):
+    policy_file = tmp_path / "policy.json"
+    policy_file.write_text(json.dumps({"ignore": [{"tool": "read_config", "check": "duplicate_calls"}]}), encoding="utf-8")
+
+    result = runner.invoke(app, [
+        "compare", "samples/wasteful_trace.json", "samples/wasteful_trace_v2.json",
+        "--policy", str(policy_file), "--fail-on-regression",
+    ])
+    # Without the policy this pair is a regression (new read_config duplicate).
+    # With it suppressed, the only remaining change is loop_thrash resolving -- not a regression.
+    assert result.exit_code == 0
+
+
+def test_report_policy_applies_to_every_trace(tmp_path):
+    d = _make_trace_dir(tmp_path, [("wasteful_trace.json", "run1.json")])
+    policy_file = tmp_path / "policy.json"
+    policy_file.write_text(json.dumps({"ignore": [{"tool": "*"}]}), encoding="utf-8")
+
+    result = runner.invoke(app, ["report", str(d), "--policy", str(policy_file), "--fail-on", "medium"])
+    assert result.exit_code == 0
+    assert "No waste detected across any trace" in result.stdout

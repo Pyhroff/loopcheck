@@ -1,0 +1,9 @@
+{
+  "ignore": [
+    {
+      "tool": "web_search",
+      "check": "loop_thrash",
+      "reason": "This agent's search tool is intentionally called many times per run as part of a known iterative-refinement pattern that's already been reviewed and accepted -- flagging it on every CI run just trains the team to ignore the gate. Genuinely new loop_thrash findings on OTHER tools still surface normally."
+    }
+  ]
+}

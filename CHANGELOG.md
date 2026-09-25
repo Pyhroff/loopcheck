@@ -5,6 +5,29 @@ stage is a small, working, tested slice rather than one big-bang commit.
 
 ## [Unreleased]
 
+## [0.7.0] -- Finding-suppression policy
+- `policy.py`: `PolicyRule`/`Policy`, ported from the same real gap
+  mcpaudit's v0.5 solved -- a rule matches on `(tool, check[, title])`,
+  the same fingerprint `compare.py` already uses, with `"*"` wildcarding
+  the tool.
+- `--policy PATH` on all three commands:
+  - `analyze`: suppressed findings dropped before the report, `--json`,
+    and `--fail-on` all see them.
+  - `compare`: policy applied to BOTH runs before matching -- a
+    suppressed finding never appears as a regression OR a resolved
+    improvement, it's simply gone, same as if the check never fired.
+  - `report`: applied to every trace before aggregating.
+- `samples/example-policy.json`: suppresses a `loop_thrash` finding on a
+  tool with a known, accepted iterative-refinement pattern.
+- 13 new tests (policy.py matching logic, --policy on all three CLI
+  commands including the compare double-suppression behavior).
+- Motivation: every real scan produces the same accepted findings on every
+  run with no way to say "reviewed, this is fine" -- which is what
+  actually makes --fail-on unusable as a CI gate in practice, same
+  motivation as mcpaudit's identical feature.
+
+115 tests total (was 102).
+
 ## [0.6.0] -- Fleet-level rollup across a directory of traces
 - `aggregate.py`: `aggregate(entries, top_n=5) -> AggregateResult` --
   total/wasted cost across a batch, findings tallied by check and by tool,

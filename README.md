@@ -35,6 +35,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the running detail.
 | **v0.4** | `semantic_redundancy` -- an opt-in, judge-backed check for redundant calls that duplicate_calls can't see (different args, same already-answered sub-goal), via `--judge groq` |
 | **v0.5** | `compare` -- regression detection between two runs of the same agent (e.g. before/after a prompt change), `--fail-on-regression` for CI |
 | **v0.6** | `report` -- aggregate waste across a directory of traces (by check, by tool, worst offenders), the fleet-level view |
+| **v0.7** | `--policy` -- suppress reviewed/accepted findings, across `analyze`, `compare`, and `report`, so `--fail-on` stays usable in CI |
 
 ## Quickstart
 
@@ -210,6 +211,43 @@ or above that severity (a per-run check applied across the batch), distinct
 from `compare --fail-on-regression`'s "did this get worse" and `analyze
 --fail-on`'s "is this one run bad."
 
+## Suppressing accepted findings (v0.7+)
+
+A real scan turns up findings that are true but already reviewed and
+accepted -- a `loop_thrash` threshold that's genuinely fine for a known
+polling pattern, a `duplicate_calls` hit that's actually intentional
+cache-busting. Without a way to say "reviewed, this is fine," `--fail-on`
+becomes unusable in CI: the first accepted finding blocks every future run
+forever. `--policy` fixes that, the same way it does in
+mcpaudit (loopcheck's sibling project) -- and works across
+all three commands:
+
+```bash
+loopcheck analyze trace.json --policy policy.json --fail-on high
+loopcheck compare before.json after.json --policy policy.json --fail-on-regression
+loopcheck report traces/ --policy policy.json --fail-on high
+```
+
+```json
+{
+  "ignore": [
+    {
+      "tool": "web_search",
+      "check": "loop_thrash",
+      "reason": "why this is accepted -- shown for humans, not enforced"
+    }
+  ]
+}
+```
+
+`tool: "*"` matches any tool; omitting `title` matches any finding for that
+`(tool, check)`. See [`samples/example-policy.json`](samples/example-policy.json).
+Suppressed findings are dropped before the printed report, `--json`, and
+`--fail-on`/`--fail-on-regression` all see them. In `compare`, a policy is
+applied to BOTH runs before matching -- a suppressed finding never shows up
+as a "regression" or a "resolved" improvement either, it's just gone, the
+same as if the check had never fired.
+
 ## CLI reference
 
 ```
@@ -219,15 +257,18 @@ loopcheck analyze <trace.json>
   --judge PROVIDER      also run semantic_redundancy against a live model (currently: groq)
   --judge-model MODEL   model for --judge groq [default: openai/gpt-oss-120b]
   --max-judge-pairs N   cap on same-tool pairs compared by --judge [default: 20]
+  --policy PATH         suppress reviewed findings (see samples/example-policy.json)
 
 loopcheck compare <before.json> <after.json>
   --json PATH             write a JSON comparison report
   --fail-on-regression    exit 1 if the after run has a new finding or higher wasted cost
+  --policy PATH           suppress reviewed findings from BOTH runs before comparing
 
 loopcheck report <trace_dir>
   --json PATH       write a JSON rollup report
   --fail-on LEVEL   exit 1 if any single trace in the batch has a finding >= LEVEL
   --top N           how many worst-offending traces to list [default: 5]
+  --policy PATH     suppress reviewed findings from every trace before aggregating
 ```
 
 ## Project structure
