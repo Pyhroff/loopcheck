@@ -1,11 +1,37 @@
 # loopcheck
 
+[![CI](https://github.com/Pyhroff/loopcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/Pyhroff/loopcheck/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 **Zero-instrumentation waste auditor for hand-rolled AI agent loops.**
 
 You built an agent with a raw tool-calling loop -- OpenAI, Anthropic, Groq,
 whatever -- no LangChain, no OpenTelemetry collector, no framework. You want
-to know: is this thing wasting money? `loopcheck` answers that from a plain
-JSON trace, no SDK integration required.
+to know: is this thing wasting money, is it getting better or worse as you
+iterate, and is a CI gate on that actually usable without drowning in
+already-reviewed findings? `loopcheck` answers all three from a plain JSON
+trace, no SDK integration required.
+
+```bash
+$ loopcheck analyze samples/wasteful_trace.json
+
+loopcheck -- research-bot (6 step(s), goal: 'Summarize the top 3 causes of the 2026 chip shortage.')
+
+MEDIUM   duplicate_calls  Repeated tool call with identical arguments
+          Tool 'web_search' was called with the same arguments {'query': '2026
+chip shortage causes'} at steps [0, 4], after already succeeding earlier in
+the trace. Repeat call(s) at [4] produced no new information.
+          est. wasted cost: $0.0001
+
+MEDIUM   loop_thrash      Tool called far more than expected for a single trace
+          Tool 'web_search' was called 5 times in one trace (steps [0, 1, 2,
+3, 4]) -- past 4 calls to the same tool in a single agent run usually means
+it's stuck refining/retrying rather than making progress.
+          est. wasted cost: $0.0001
+
+Total trace cost: $0.0005  |  Estimated wasted: $0.0001 (32.1%)
+```
 
 ## Why this exists
 
@@ -275,16 +301,45 @@ loopcheck report <trace_dir>
 
 ```
 loopcheck/
-  trace.py              Step/Trace dataclasses, the framework-agnostic schema
-  findings.py            Finding/Severity
-  report.py              text + JSON rendering, cost aggregation
-  cli.py                  typer CLI
+  trace.py                    Step/Trace dataclasses -- the framework-agnostic schema (v0.1)
+  recorder.py                  TraceRecorder -- record a trace from a real loop (v0.2)
+  findings.py                   Finding/Severity
+  judge.py                      Judge Protocol for semantic_redundancy (v0.4)
+  policy.py                     PolicyRule/Policy -- suppress reviewed findings (v0.7)
+  compare.py                    regression detection between two runs (v0.5)
+  aggregate.py                   fleet-level rollup across many runs (v0.6)
+  report.py                      text + JSON rendering for all four report shapes
+  cli.py                          typer CLI -- analyze / compare / report
   checks/
-    duplicate_calls.py    exact-repeat detection
-    loop_thrash.py         same-tool-hammered detection
-samples/                  real example traces (clean, wasteful, legitimate-retry)
-tests/                     27 tests, all against real trace data
+    duplicate_calls.py           exact-repeat detection (v0.1)
+    loop_thrash.py                same-tool-hammered detection (v0.1)
+    semantic_redundancy.py         judge-backed, opt-in (v0.4)
+  adapters/                     OpenAI / Anthropic / Groq response -> Step (v0.2, v0.3)
+  judges/
+    groq_judge.py                 the one concrete Judge today (v0.4)
+samples/                       real example traces (clean, wasteful, a legitimate-retry
+                                case, a regressed variant) plus an example policy file
+tests/                          115 tests, all against real trace data and real
+                                 sample-shaped fixtures -- no synthetic mocks standing
+                                 in for the actual behavior under test
+.github/workflows/ci.yml        tests + a CLI smoke test against real sample traces,
+                                 on every push, across Python 3.10/3.11/3.12
 ```
+
+## Development
+
+```bash
+git clone <this repo>
+cd loopcheck
+pip install -e ".[dev,judge]"
+pytest tests/ -v
+```
+
+Every check in `checks/` (except `semantic_redundancy`, which needs a
+`Judge`) is pure and deterministic -- no network, no API key, no mocking
+required to test it end to end. The judge-backed and CLI tests mock only
+the boundary that actually needs it (the Groq SDK client, typer's own
+`CliRunner`), never the logic being tested.
 
 ## Limitations
 
