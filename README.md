@@ -33,36 +33,22 @@ it's stuck refining/retrying rather than making progress.
 Total trace cost: $0.0005  |  Estimated wasted: $0.0001 (32.1%)
 ```
 
-## Why this exists
+## Why
 
-Every agent observability tool right now (LangSmith, Braintrust, Arize
-Phoenix, Langfuse, DeepEval, MLflow) is built for a team with a production
-agent and instrumentation already wired in. The closer analog to this idea,
-`redundo`, still expects OpenTelemetry traces. None of them are a "just point
-this at a trace and get an answer" tool for a hand-rolled loop, and none of
-them look past exact duplicate calls at *thrashing* -- an agent that keeps
-calling the same tool with slightly different arguments, never converging,
-without ever repeating an identical call.
+Agent observability platforms (LangSmith, Langfuse, Arize Phoenix and others) assume a production agent with instrumentation already in place. If you have a hand-rolled tool-calling loop and want to know whether one run wasted money, or whether a prompt change made things better or worse, you mostly end up reading logs.
 
-`loopcheck` is deliberately narrow: it doesn't try to be an observability
-platform. It answers one question -- **did this specific run waste money** --
-from one file, with zero setup.
+loopcheck reads a plain JSON trace and reports wasted tool calls. It does not try to be an observability platform. It looks past exact duplicate calls for thrashing (the same tool called repeatedly with slightly different arguments, never converging) and for failing calls retried unchanged.
 
-## Status: version-incremental prototype
+## Features
 
-Each version below is a complete, working, tested slice, not a stub.
-See [CHANGELOG.md](CHANGELOG.md) for the running detail.
-
-| Version | Adds |
+| Command / feature | What it does |
 |---|---|
-| **v0.1** | Trace schema (framework-agnostic JSON) + `duplicate_calls` (exact repeat detection) + `loop_thrash` (same-tool-hammered-repeatedly detection), text/JSON report, cost estimation, CI-gate exit code |
-| **v0.2** | `TraceRecorder` + adapters for OpenAI, Anthropic, and Groq tool-calling responses -- record a trace directly from your real loop, no hand-written JSON |
-| **v0.3** | Parallel tool-call support -- `record_*_turn()` fans every tool call in a single model response out into its own step, sharing a `turn` number |
-| **v0.4** | `semantic_redundancy` -- an opt-in, judge-backed check for redundant calls that duplicate_calls can't see (different args, same already-answered sub-goal), via `--judge groq` |
-| **v0.5** | `compare` -- regression detection between two runs of the same agent (e.g. before/after a prompt change), `--fail-on-regression` for CI |
-| **v0.6** | `report` -- aggregate waste across a directory of traces (by check, by tool, worst offenders), the fleet-level view |
-| **v0.7** | `--policy` -- suppress reviewed/accepted findings, across `analyze`, `compare`, and `report`, so `--fail-on` stays usable in CI |
-| **v0.8** | `stale_retry` -- flags an identical failing call retried with zero argument changes past the first attempt, a real cost signal duplicate_calls (success-gated) and loop_thrash (varying-args threshold) both miss |
+| `analyze` | Runs the checks on one trace, prints findings and estimated wasted cost, optional CI gate |
+| `TraceRecorder` + adapters | Record a trace from an OpenAI, Anthropic, or Groq tool-calling loop, including parallel tool calls |
+| `compare` | Regression detection between two runs of the same agent, with `--fail-on-regression` |
+| `report` | Aggregate waste across a directory of traces (by check, by tool, worst runs) |
+| `--policy` | Suppress reviewed findings across `analyze`, `compare`, and `report` |
+| `--judge groq` | Optional model-backed `semantic_redundancy` check |
 
 ## Quickstart
 
@@ -246,7 +232,7 @@ polling pattern, a `duplicate_calls` hit that's actually intentional
 cache-busting. Without a way to say "reviewed, this is fine," `--fail-on`
 becomes unusable in CI: the first accepted finding blocks every future run
 forever. `--policy` fixes that, the same way it does in
-mcpaudit (loopcheck's sibling project) -- and works across
+[mcpaudit](https://github.com/Pyhroff/mcpaudit) -- and works across
 all three commands:
 
 ```bash
@@ -320,9 +306,7 @@ loopcheck/
     groq_judge.py                 the one concrete Judge today (v0.4)
 samples/                       real example traces (clean, wasteful, a legitimate-retry
                                 case, a regressed variant) plus an example policy file
-tests/                          115 tests, all against real trace data and real
-                                 sample-shaped fixtures -- no synthetic mocks standing
-                                 in for the actual behavior under test
+tests/                          121 tests
 .github/workflows/ci.yml        tests + a CLI smoke test against real sample traces,
                                  on every push, across Python 3.10/3.11/3.12
 ```
@@ -330,10 +314,10 @@ tests/                          115 tests, all against real trace data and real
 ## Development
 
 ```bash
-git clone <this repo>
+git clone https://github.com/Pyhroff/loopcheck.git
 cd loopcheck
 pip install -e ".[dev,judge]"
-pytest tests/ -v
+pytest -q      # 121 tests
 ```
 
 Every check in `checks/` (except `semantic_redundancy`, which needs a
@@ -347,9 +331,7 @@ the boundary that actually needs it (the Groq SDK client, typer's own
 - `semantic_redundancy` only compares pairs within the SAME tool, and only
   up to `--max-judge-pairs` of them -- it's a bounded sample, not an
   exhaustive pairwise audit of a long trace.
-- `GroqJudge` is the only concrete `Judge` today; adding another provider
-  is a new class implementing the same small Protocol, not a loopcheck
-  code change.
+- `GroqJudge` is the only `Judge` implementation. Another provider means a new class implementing the same small Protocol.
 - Cost estimates are only as accurate as the token counts and per-1K prices
   you put in the trace; loopcheck doesn't call any pricing API.
 

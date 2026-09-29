@@ -1,7 +1,6 @@
 # Changelog
 
-This project is built as an explicit version-incremental prototype: each
-stage is a small, working, tested slice rather than one big-bang commit.
+Notable changes by version.
 
 ## [Unreleased]
 
@@ -118,7 +117,7 @@ stage is a small, working, tested slice rather than one big-bang commit.
   and two CLI tests for graceful degradation (missing API key, unsupported
   provider name).
 
-71 tests total (was 57). Same honest handling as mcpaudit's --dynamic
+71 tests total (was 57). Same handling as mcpaudit's --dynamic
 check: this is the one piece of loopcheck that needs a live model and
 network access, and it's fully isolated behind the Judge Protocol so
 everything else stays free and deterministic.
@@ -203,9 +202,6 @@ turn.
   end-to-end CLI invocation via `typer.testing.CliRunner` against the real
   sample files.
 
-Motivation: every agent-observability tool right now (LangSmith, Braintrust,
-Phoenix, Langfuse, DeepEval, MLflow) assumes a production agent with
-instrumentation already wired in; the closest existing analog (`redundo`)
-still requires OpenTelemetry traces. Nothing targets the "I have a
-hand-rolled loop and a JSON trace, tell me if it wasted money" case with
-zero setup -- and nothing looks past exact duplicates at thrashing.
+Motivation: existing agent-observability tools assume a production agent with
+instrumentation already wired in. This covers the case of a hand-rolled loop and a
+JSON trace, with no setup, and looks past exact duplicates at thrashing.
