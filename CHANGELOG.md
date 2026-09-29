@@ -5,6 +5,23 @@ stage is a small, working, tested slice rather than one big-bang commit.
 
 ## [Unreleased]
 
+## [0.8.0] -- stale_retry check
+- `checks/stale_retry.py`: flags a tool call that failed with the exact
+  same arguments two or more times in a row -- a real gap duplicate_calls'
+  own design leaves open (it only counts repeats after a *success* as
+  waste, deliberately treating a post-error repeat as a legitimate retry)
+  and that loop_thrash often misses too (its default threshold of 4 is
+  tuned for thrashing across varying arguments, not a tight 2-3 call
+  identical-failure loop). The first failure is never counted as waste --
+  only the identical attempts that follow it, once the "maybe it's
+  transient" benefit of the doubt has already been used up once.
+- 6 new tests (clean trace, single failure not flagged, second identical
+  failure flagged, eventual success doesn't retroactively clear the
+  finding, severity escalation past 2x the threshold, different-args
+  failures not conflated). 121 total, all passing.
+- Wired into `analyze`'s `run_checks()` alongside duplicate_calls and
+  loop_thrash.
+
 ## [0.7.0] -- Finding-suppression policy
 - `policy.py`: `PolicyRule`/`Policy`, ported from the same real gap
   mcpaudit's v0.5 solved -- a rule matches on `(tool, check[, title])`,

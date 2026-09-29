@@ -31,6 +31,7 @@ from loopcheck import __version__
 from loopcheck.aggregate import aggregate
 from loopcheck.checks.duplicate_calls import check_duplicate_calls
 from loopcheck.checks.loop_thrash import check_loop_thrash
+from loopcheck.checks.stale_retry import check_stale_retry
 from loopcheck.checks.semantic_redundancy import check_semantic_redundancy
 from loopcheck.compare import compare_findings
 from loopcheck.findings import Finding, Severity
@@ -71,6 +72,7 @@ def run_checks(trace: Trace) -> list[Finding]:
     findings: list[Finding] = []
     findings += check_duplicate_calls(trace)
     findings += check_loop_thrash(trace)
+    findings += check_stale_retry(trace)
     return findings
 
 

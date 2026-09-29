@@ -62,6 +62,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the running detail.
 | **v0.5** | `compare` -- regression detection between two runs of the same agent (e.g. before/after a prompt change), `--fail-on-regression` for CI |
 | **v0.6** | `report` -- aggregate waste across a directory of traces (by check, by tool, worst offenders), the fleet-level view |
 | **v0.7** | `--policy` -- suppress reviewed/accepted findings, across `analyze`, `compare`, and `report`, so `--fail-on` stays usable in CI |
+| **v0.8** | `stale_retry` -- flags an identical failing call retried with zero argument changes past the first attempt, a real cost signal duplicate_calls (success-gated) and loop_thrash (varying-args threshold) both miss |
 
 ## Quickstart
 

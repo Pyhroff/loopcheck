@@ -55,7 +55,7 @@ def test_missing_trace_file_exits_2():
 def test_version_flag():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "0.7.0" in result.stdout
+    assert "0.8.0" in result.stdout
 
 
 def test_judge_flag_without_api_key_skips_gracefully(monkeypatch):
