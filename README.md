@@ -5,7 +5,7 @@
 **Zero-instrumentation waste auditor for hand-rolled AI agent loops.**
 
 [![CI](https://github.com/Pyhroff/loopcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/Pyhroff/loopcheck/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 </div>
@@ -14,14 +14,14 @@
 
 ## Why loopcheck?
 
-Frameworks can hide the cost of an agent loop.
+Frameworks can hide the cost and inefficiency of an agent loop.
 
 `loopcheck` works from a plain JSON trace and answers:
 
 - Are tools being called unnecessarily?
 - Is the agent thrashing or retrying unchanged work?
 - Did a prompt/model/tool change make the loop worse?
-- Where is the wasted cost accumulating?
+- Where is wasted cost accumulating?
 
 It is the **behavior module inside [aisec-suite](https://github.com/Pyhroff/aisec-suite)**.
 
@@ -50,11 +50,11 @@ loopcheck report traces/ --json rollup.json
 aisec behavior trace.json --json behavior-findings.json
 ```
 
-The umbrella adapter normalizes deterministic specialist findings into the common suite format.
+The umbrella adapter normalizes specialist findings into the shared suite format.
 
 ## LLM judge
 
-Semantic redundancy is opt-in and can use a Groq-backed judge:
+Semantic redundancy is opt-in:
 
 ```bash
 GROQ_API_KEY=... loopcheck analyze trace.json --judge groq
