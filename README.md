@@ -5,7 +5,7 @@
 **Zero-instrumentation waste auditor for hand-rolled AI agent loops.**
 
 [![CI](https://github.com/Pyhroff/loopcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/Pyhroff/loopcheck/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 </div>
@@ -52,10 +52,6 @@ aisec behavior trace.json --json behavior-findings.json
 
 The umbrella adapter normalizes deterministic specialist findings into the common suite format.
 
-## Trace model
-
-A trace records the goal, pricing metadata, tool calls, token counts, results, and errors. A final step with `tool_name: null` represents the agent's answer.
-
 ## LLM judge
 
 Semantic redundancy is opt-in and can use a Groq-backed judge:
@@ -68,7 +64,7 @@ Deterministic checks do not require a model or API key.
 
 ## Limitations
 
-Cost estimates depend on the pricing and token data present in the trace. The semantic judge is bounded and model-dependent.
+Cost estimates depend on trace token and pricing data. The semantic judge is bounded and model-dependent.
 
 ## Development
 
