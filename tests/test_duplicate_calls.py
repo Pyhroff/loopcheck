@@ -1,4 +1,5 @@
 from loopcheck.checks.duplicate_calls import check_duplicate_calls
+from loopcheck.findings import Severity
 from loopcheck.trace import Step, Trace
 
 
@@ -74,3 +75,13 @@ def test_identical_calls_within_one_parallel_turn_are_flagged():
     findings = check_duplicate_calls(rec.trace)
     assert len(findings) == 1
     assert findings[0].step_indices == [1]
+
+
+def test_single_repeat_after_success_is_low_signal():
+    trace = _trace([
+        Step(index=0, turn=0, reasoning="fetch", tool_name="get_weather", tool_args={"city":"Austin"}, tool_result="72F", is_error=False),
+        Step(index=1, turn=1, reasoning="verify display", tool_name="get_weather", tool_args={"city":"Austin"}, tool_result="72F", is_error=False),
+    ])
+    findings = check_duplicate_calls(trace)
+    assert len(findings) == 1
+    assert findings[0].severity == Severity.LOW
