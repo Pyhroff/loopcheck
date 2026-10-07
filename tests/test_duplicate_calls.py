@@ -1,4 +1,5 @@
 from loopcheck.checks.duplicate_calls import check_duplicate_calls
+from loopcheck.findings import Severity
 from loopcheck.trace import Step, Trace
 
 
