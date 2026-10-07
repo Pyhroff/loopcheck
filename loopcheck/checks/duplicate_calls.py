@@ -59,7 +59,7 @@ def check_duplicate_calls(trace: Trace) -> list[Finding]:
 
         findings.append(Finding(
             check="duplicate_calls",
-            severity=Severity.HIGH if len(wasted_indices) >= 2 else Severity.MEDIUM,
+            severity=Severity.HIGH if len(wasted_indices) >= 2 else Severity.LOW,
             title="Repeated tool call with identical arguments",
             tool=tool_name,
             detail=(
