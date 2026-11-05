@@ -1,16 +1,10 @@
-# 🔁 loopcheck
-
-<div align="center">
-
-**Zero-instrumentation waste auditor for hand-rolled AI agent loops.**
+# loopcheck
 
 [![CI](https://github.com/Pyhroff/loopcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/Pyhroff/loopcheck/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-</div>
-
----
+**Zero-instrumentation waste auditor for hand-rolled AI agent loops.**
 
 ## Why loopcheck?
 
@@ -24,6 +18,14 @@ Frameworks can hide the cost and inefficiency of an agent loop.
 - Where is wasted cost accumulating?
 
 It is the **behavior module inside [aisec-suite](https://github.com/Pyhroff/aisec-suite)**.
+
+## Install
+
+Not published on PyPI; install from source:
+
+```bash
+pip install "git+https://github.com/Pyhroff/loopcheck.git"
+```
 
 ## Core capabilities
 
