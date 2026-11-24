@@ -4,6 +4,9 @@ Notable changes by version.
 
 ## [Unreleased]
 
+- `--fail-on` is validated before any trace is read, on both `analyze` and `report`: an unknown severity is a usage error (exit 2) instead of a `ValueError` traceback (on `analyze`, only after the whole analysis had run).
+- Packaging: SPDX `license = "MIT"` (PEP 639) replaces the deprecated license table; `wheel` is no longer listed as a build requirement (setuptools has not needed it since 70.1). Python 3.13 and 3.14 added to CI, and the matrix no longer cancels other versions when one fails.
+
 ## [0.8.0] -- stale_retry check
 - `checks/stale_retry.py`: flags a tool call that failed with the exact
   same arguments two or more times in a row -- a real gap duplicate_calls'

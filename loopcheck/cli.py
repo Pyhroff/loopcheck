@@ -68,6 +68,21 @@ def main(
     pass
 
 
+_SEVERITY_ORDER = ["info", "low", "medium", "high"]
+
+
+def _parse_fail_on(value: Optional[str]) -> Optional[int]:
+    """Validate --fail-on up front: a typo is a usage error (exit 2), not a ValueError traceback."""
+    if value is None:
+        return None
+    try:
+        return _SEVERITY_ORDER.index(value.lower())
+    except ValueError:
+        raise typer.BadParameter(
+            f"{value!r} is not one of: {', '.join(_SEVERITY_ORDER)}", param_hint="--fail-on"
+        ) from None
+
+
 def run_checks(trace: Trace) -> list[Finding]:
     findings: list[Finding] = []
     findings += check_duplicate_calls(trace)
@@ -109,6 +124,7 @@ def analyze(
     ),
 ):
     """Analyze a single agent trace for wasted tool calls."""
+    threshold = _parse_fail_on(fail_on)
     try:
         trace = Trace.load(trace_file)
     except Exception as exc:  # noqa: BLE001
@@ -133,11 +149,8 @@ def analyze(
         json_out.write_text(to_json(trace, findings), encoding="utf-8")
         console.print(f"\n[dim]JSON report written to {json_out}[/]")
 
-    if fail_on:
-        order = ["info", "low", "medium", "high"]
-        threshold = order.index(fail_on.lower())
-        if any(order.index(f.severity.value) >= threshold for f in findings):
-            raise typer.Exit(1)
+    if threshold is not None and any(_SEVERITY_ORDER.index(f.severity.value) >= threshold for f in findings):
+        raise typer.Exit(1)
 
 
 async def _run_judge_check(trace: Trace, judge_name: str, judge_model: str, max_pairs: int) -> list[Finding]:
@@ -218,6 +231,7 @@ def report(
 ):
     """Aggregate waste across every *.json trace in a directory -- where the money's
     actually going across a batch of runs, not just one."""
+    threshold = _parse_fail_on(fail_on)
     files = sorted(trace_dir.glob("*.json"))
     if not files:
         console.print(f"[red]No .json trace files found in {trace_dir}[/]")
@@ -226,8 +240,6 @@ def report(
     policy = _load_policy(policy_file)
     entries = []
     any_over_threshold = False
-    order = ["info", "low", "medium", "high"]
-    threshold = order.index(fail_on.lower()) if fail_on else None
 
     for f in files:
         try:
@@ -239,7 +251,7 @@ def report(
         if policy:
             findings, _ = policy.apply(findings)
         entries.append((f.name, trace, findings))
-        if threshold is not None and any(order.index(fnd.severity.value) >= threshold for fnd in findings):
+        if threshold is not None and any(_SEVERITY_ORDER.index(fnd.severity.value) >= threshold for fnd in findings):
             any_over_threshold = True
 
     result = aggregate(entries, top_n=top)
@@ -249,7 +261,7 @@ def report(
         json_out.write_text(to_json_aggregate(result), encoding="utf-8")
         console.print(f"\n[dim]JSON rollup report written to {json_out}[/]")
 
-    if fail_on and any_over_threshold:
+    if any_over_threshold:
         raise typer.Exit(1)
 
 
